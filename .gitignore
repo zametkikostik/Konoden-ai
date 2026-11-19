@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+cache/
+*.mp4
+*.mov
+*.mp3
+*.wav
+transcript.json
+timeline.json
+*.candidates.json
+*.edl
+.pytest_cache/
