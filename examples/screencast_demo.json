@@ -1,0 +1,12 @@
+{
+  "allowed_hosts": ["example.com"],
+  "tail_seconds": 1.5,
+  "steps": [
+    {"action": "goto", "url": "https://example.com"},
+    {"action": "wait", "seconds": 1},
+    {"action": "zoom", "selector": "h1", "scale": 1.6},
+    {"action": "wait", "seconds": 1.5},
+    {"action": "zoom"},
+    {"action": "click", "selector": "a"}
+  ]
+}

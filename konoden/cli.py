@@ -12,6 +12,7 @@ from .llm.base import LLMError
 from .llm.factory import make_backend
 from .planner import plan_timeline
 from .render.assemble import AssembleError, assemble
+from .render.screencast import Scenario, ScreencastError, capture, render_screencasts
 from .sources.base import SourceError
 from .sources.resolver import make_providers, resolve_timeline, sidecar_path, swap_candidate
 from .stt.openrouter_stt import STTError, save_transcript, transcribe
@@ -57,6 +58,22 @@ def _cmd_swap(a, s: Settings) -> None:
     chosen = swap_candidate(tl, a.clip_id, sidecar_path(a.timeline), a.pick, s.cache_dir)
     tl.save(a.timeline)
     print(f"OK: {a.clip_id} -> {chosen.ref} ({chosen.page_url})")
+
+
+def _cmd_screencast(a, s: Settings) -> None:
+    dur = capture(Scenario.load(a.scenario), a.out, accent=s.brand["accent_color"])
+    print(f"OK: {a.out} ({dur:.1f} сек)")
+
+
+def _cmd_render(a, s: Settings) -> None:
+    tl = Timeline.load(a.timeline)
+    warnings = render_screencasts(
+        tl, Path(a.timeline).resolve().parent, a.out_dir, force=a.force, accent=s.brand["accent_color"]
+    )
+    tl.save(a.timeline)
+    for w in warnings:
+        print(f"  ! {w}")
+    print(f"OK: скринкасты -> {a.out_dir}")
 
 
 def _cmd_assemble(a, s: Settings) -> None:
@@ -124,6 +141,17 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--pick", type=int, required=True, help="номер кандидата, с 1")
     sp.set_defaults(fn=_cmd_swap)
 
+    sp = sub.add_parser("screencast", help="сценарий (JSON) -> mp4 с курсором и зумом (Playwright)")
+    sp.add_argument("scenario")
+    sp.add_argument("--out", default="screencast.mp4")
+    sp.set_defaults(fn=_cmd_screencast)
+
+    sp = sub.add_parser("render", help="записать screencast-клипы таймлайна по их сценариям")
+    sp.add_argument("timeline")
+    sp.add_argument("--out-dir", default="renders")
+    sp.add_argument("--force", action="store_true")
+    sp.set_defaults(fn=_cmd_render)
+
     sp = sub.add_parser("assemble", help="timeline.json -> mp4 (черновая сборка)")
     sp.add_argument("timeline")
     sp.add_argument("--out", default="draft.mp4")
@@ -141,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     try:
         a.fn(a, s)
-    except (LLMError, STTError, AssembleError, SourceError) as e:
+    except (LLMError, STTError, AssembleError, SourceError, ScreencastError) as e:
         print(f"Ошибка: {e}", file=sys.stderr)
         return 1
     return 0

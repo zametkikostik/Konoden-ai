@@ -1,12 +1,13 @@
 [project]
 name = "konoden-ai"
-version = "0.2.0"
+version = "0.3.0"
 description = "Konoden AI — AI video editor (white-label ready)"
 requires-python = ">=3.10"
 dependencies = ["pydantic>=2.5", "requests>=2.31"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+screencast = ["playwright>=1.45"]
 
 [project.scripts]
 konoden = "konoden.cli:main"
