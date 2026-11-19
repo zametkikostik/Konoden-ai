@@ -20,6 +20,12 @@ class Clip(BaseModel):
     src: Optional[str] = Field(
         default=None, description="Путь к файлу. Заполняется системой, а не LLM"
     )
+    source_ref: Optional[str] = Field(
+        default=None, description="Откуда взят материал, напр. pexels:12345. Заполняется системой"
+    )
+    attribution: Optional[str] = Field(
+        default=None, description="Автор/провайдер для титров. Заполняется системой"
+    )
     start: float = Field(default=0.0, ge=0, description="Смещение внутри исходника, сек")
     duration: float = Field(gt=0, le=120, description="Длительность клипа на таймлайне, сек")
     voiceover: Optional[str] = Field(default=None, description="Текст озвучки для этой сцены")
@@ -43,6 +49,12 @@ class Timeline(BaseModel):
     @property
     def total_duration(self) -> float:
         return sum(c.duration for c in self.clips)
+
+    def clip(self, clip_id: str) -> Clip:
+        for c in self.clips:
+            if c.id == clip_id:
+                return c
+        raise KeyError(f"Нет клипа {clip_id!r}")
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(self.model_dump_json(indent=2), encoding="utf-8")

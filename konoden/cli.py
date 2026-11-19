@@ -12,6 +12,8 @@ from .llm.base import LLMError
 from .llm.factory import make_backend
 from .planner import plan_timeline
 from .render.assemble import AssembleError, assemble
+from .sources.base import SourceError
+from .sources.resolver import make_providers, resolve_timeline, sidecar_path, swap_candidate
 from .stt.openrouter_stt import STTError, save_transcript, transcribe
 
 
@@ -34,6 +36,29 @@ def _cmd_transcribe(a, s: Settings) -> None:
     print(f"OK: {len(data['segments'])} кусков, {len(data['text'])} символов -> {a.out}")
 
 
+def _cmd_resolve(a, s: Settings) -> None:
+    tl = Timeline.load(a.timeline)
+    report = resolve_timeline(
+        tl, make_providers(s), s.cache_dir, alternatives=a.alternatives, force=a.force
+    )
+    tl.save(a.timeline)
+    side = sidecar_path(a.timeline)
+    report.save(side)
+    for cid, cands in report.candidates.items():
+        top = cands[0]
+        print(f"  {cid}: {top.ref} ({top.width}x{top.height}, {top.duration:.0f}с), альтернатив: {len(cands) - 1}")
+    for w in report.warnings:
+        print(f"  ! {w}")
+    print(f"OK: подобрано {len(report.candidates)} клипов -> {a.timeline}; кандидаты -> {side}")
+
+
+def _cmd_swap(a, s: Settings) -> None:
+    tl = Timeline.load(a.timeline)
+    chosen = swap_candidate(tl, a.clip_id, sidecar_path(a.timeline), a.pick, s.cache_dir)
+    tl.save(a.timeline)
+    print(f"OK: {a.clip_id} -> {chosen.ref} ({chosen.page_url})")
+
+
 def _cmd_assemble(a, s: Settings) -> None:
     out = assemble(Timeline.load(a.timeline), a.out, audio=a.audio)
     print(f"OK: {out}")
@@ -45,20 +70,24 @@ def _cmd_edl(a, s: Settings) -> None:
 
 
 def _cmd_doctor(a, s: Settings) -> None:
+    yes = lambda v: "задан" if v else "НЕ ЗАДАН"  # noqa: E731
     print(f"{s.brand['product_name']} — проверка окружения")
-    print(f"  ffmpeg:        {'OK' if shutil.which('ffmpeg') else 'НЕ НАЙДЕН'}")
-    print(f"  LLM-бэкенд:    {s.llm_backend}")
+    print(f"  ffmpeg:         {'OK' if shutil.which('ffmpeg') else 'НЕ НАЙДЕН'}")
+    print(f"  LLM-бэкенд:     {s.llm_backend}")
     if s.llm_backend == "ollama":
         import requests
         try:
             tags = requests.get(f"{s.ollama_host}/api/tags", timeout=5).json()
-            names = [m["name"] for m in tags.get("models", [])]
-            ok = any(n.split(":")[0] == s.ollama_model.split(":")[0] and n == s.ollama_model for n in names) or s.ollama_model in names
-            print(f"  Ollama:        OK, модель {s.ollama_model}: {'есть' if ok else 'НЕ СКАЧАНА (ollama pull ...)'}")
+            names = {m["name"] for m in tags.get("models", [])}
+            have = s.ollama_model in names or f"{s.ollama_model}:latest" in names
+            print(f"  Ollama:         OK, модель {s.ollama_model}: {'есть' if have else 'НЕ СКАЧАНА (ollama pull)'}")
         except Exception as e:  # noqa: BLE001
-            print(f"  Ollama:        недоступна ({e.__class__.__name__})")
-    print(f"  OpenRouter key:{' задан' if s.openrouter_api_key else ' НЕ ЗАДАН (нужен для транскрипции)'}")
-    print(f"  STT модель:    {s.stt_model}")
+            print(f"  Ollama:         недоступна ({e.__class__.__name__})")
+    print(f"  OpenRouter key: {yes(s.openrouter_api_key)} (транскрипция)")
+    print(f"  STT модель:     {s.stt_model}")
+    print(f"  Pexels key:     {yes(s.pexels_api_key)}")
+    print(f"  Pixabay key:    {yes(s.pixabay_api_key)}")
+    print(f"  Кэш:            {s.cache_dir}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -83,6 +112,18 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--chunk", type=int, default=600, help="длина куска, сек")
     sp.set_defaults(fn=_cmd_transcribe)
 
+    sp = sub.add_parser("resolve", help="подобрать и скачать сток-видео для footage-клипов")
+    sp.add_argument("timeline")
+    sp.add_argument("--alternatives", type=int, default=5, help="сколько кандидатов хранить на клип")
+    sp.add_argument("--force", action="store_true", help="перезаписать уже заданные src")
+    sp.set_defaults(fn=_cmd_resolve)
+
+    sp = sub.add_parser("swap", help="заменить материал клипа на альтернативу")
+    sp.add_argument("timeline")
+    sp.add_argument("clip_id")
+    sp.add_argument("--pick", type=int, required=True, help="номер кандидата, с 1")
+    sp.set_defaults(fn=_cmd_swap)
+
     sp = sub.add_parser("assemble", help="timeline.json -> mp4 (черновая сборка)")
     sp.add_argument("timeline")
     sp.add_argument("--out", default="draft.mp4")
@@ -100,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     try:
         a.fn(a, s)
-    except (LLMError, STTError, AssembleError) as e:
+    except (LLMError, STTError, AssembleError, SourceError) as e:
         print(f"Ошибка: {e}", file=sys.stderr)
         return 1
     return 0
