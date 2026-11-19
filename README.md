@@ -19,7 +19,9 @@ konoden plan "Ролик 60 сек про P2P-мессенджеры" --out time
 konoden resolve timeline.json                                          # подбор и скачивание стока
 konoden swap timeline.json c03 --pick 2                                # заменить материал на альтернативу
 konoden screencast examples/screencast_demo.json --out demo.mp4        # скринкаст с курсором и зумом
-konoden render timeline.json                                           # записать screencast-клипы по их scenario
+konoden specs timeline.json                                            # LLM: спецификации инфографики (данные сверять!)
+konoden infographic examples/infographics/bars.json --out bars.mp4     # отдельная инфографика
+konoden render timeline.json                                           # записать screencast- и infographic-клипы
 konoden transcribe interview.mp4 --language ru                         # облачный Whisper
 konoden assemble timeline.json --out draft.mp4 --audio voice.mp3       # черновик
 konoden edl timeline.json --out cut.edl                                # File > Import в Premiere Pro
@@ -32,11 +34,12 @@ konoden/
   llm/       адаптеры Ollama / OpenRouter
   stt/       транскрипция через OpenRouter
   sources/   Pexels / Pixabay, ранжирование, кэш, swap
-  render/    FFmpeg-сборка, скринкасты (Playwright)
+  render/    FFmpeg-сборка, скринкасты и инфографика (Playwright)
+  spec_planner.py  LLM -> спецификации инфографики
   export/    EDL для Premiere
 branding/    brand.json — белая этикетка
-examples/    пример сценария скринкаста
-tests/       pytest (20 тестов; браузерные пропускаются, если нет Chromium)
+examples/    сценарий скринкаста, 4 примера инфографики
+tests/       pytest (31 тест; браузерные пропускаются, если нет Chromium)
 ```
 
 ## Известные ограничения
@@ -51,9 +54,15 @@ tests/       pytest (20 тестов; браузерные пропускают�
 Ограничения: после `zoom` курсор не масштабируется вместе с контентом (делай zoom на финальной цели или сбрасывай перед кликами);
 zoom использует transform на `<body>`, страницы с `position: fixed` могут вести себя странно.
 
+## Инфографика
+Типы: `bar_chart`, `donut`, `counter`, `steps`. Чистый HTML/CSS/JS, запись через Playwright: без внешних зависимостей и лицензионных рисков.
+Весь текст экранируется. Цвет акцента берётся из `branding/brand.json`, тема `dark`/`light` задаётся в спецификации.
+LLM-спецификации (`konoden specs`) могут содержать выдуманные цифры: промпт это запрещает, но данные нужно сверять.
+Шрифты: системные (Inter → Segoe UI → Roboto → Arial), внешних загрузок нет, вид слегка отличается на разных ОС.
+
 ## Дорожная карта
 - [x] v0.1 каркас: схема, LLM, STT, сборка, EDL
 - [x] v0.2 sources: подбор стока + swap
 - [x] v0.3 screencast (Playwright)
-- [ ] v0.4 infographic (Remotion; проверить лицензию)
+- [x] v0.4 infographic (HTML/CSS вместо Remotion: условия Remotion для white-label-перепродажи требуют отдельного плана)
 - [ ] v0.5 export xmeml (несколько дорожек), субтитры, TTS

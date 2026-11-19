@@ -144,7 +144,7 @@ def _center(page, selector: str) -> tuple[float, float]:
     return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
 
 
-def capture(scenario: Scenario, out_path: str | Path, *, accent: str = "#6C5CE7") -> float:
+def capture(scenario: Scenario, out_path: str | Path, *, accent: str = "#6C5CE7", cursor: bool = True) -> float:
     """Выполнить сценарий и записать mp4. Возвращает длительность результата, сек."""
     try:
         from playwright.sync_api import Error as PWError
@@ -167,7 +167,8 @@ def capture(scenario: Scenario, out_path: str | Path, *, accent: str = "#6C5CE7"
         except PWError as e:
             raise ScreencastError(f"Не удалось запустить Chromium (playwright install chromium?): {e}") from e
         ctx = browser.new_context(viewport=size, record_video_dir=tmp, record_video_size=size)
-        ctx.add_init_script(_CURSOR_JS.replace("%ACCENT%", accent))
+        if cursor:
+            ctx.add_init_script(_CURSOR_JS.replace("%ACCENT%", accent))
         page = ctx.new_page()
         t0 = time.monotonic()
         trim = 0.0
@@ -178,7 +179,8 @@ def capture(scenario: Scenario, out_path: str | Path, *, accent: str = "#6C5CE7"
                     if st.action == "goto":
                         check_url_allowed(st.url, scenario.allowed_hosts)
                         page.goto(st.url, wait_until="load", timeout=30_000)
-                        page.mouse.move(*last)  # синхронизировать оверлей после навигации
+                        if cursor:
+                            page.mouse.move(*last)  # синхронизировать оверлей после навигации
                         if first_goto:
                             trim, first_goto = time.monotonic() - t0, False
                     elif st.action in ("click", "hover"):

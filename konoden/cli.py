@@ -12,7 +12,9 @@ from .llm.base import LLMError
 from .llm.factory import make_backend
 from .planner import plan_timeline
 from .render.assemble import AssembleError, assemble
+from .render.infographic import InfographicSpec, render_infographic, render_infographics
 from .render.screencast import Scenario, ScreencastError, capture, render_screencasts
+from .spec_planner import plan_specs
 from .sources.base import SourceError
 from .sources.resolver import make_providers, resolve_timeline, sidecar_path, swap_candidate
 from .stt.openrouter_stt import STTError, save_transcript, transcribe
@@ -65,15 +67,31 @@ def _cmd_screencast(a, s: Settings) -> None:
     print(f"OK: {a.out} ({dur:.1f} сек)")
 
 
-def _cmd_render(a, s: Settings) -> None:
+def _cmd_infographic(a, s: Settings) -> None:
+    spec = InfographicSpec.load(a.spec)
+    dur = render_infographic(spec, a.out, width=a.width, height=a.height, fps=a.fps, accent=s.brand["accent_color"])
+    print(f"OK: {a.out} ({dur:.1f} сек)")
+
+
+def _cmd_specs(a, s: Settings) -> None:
     tl = Timeline.load(a.timeline)
-    warnings = render_screencasts(
-        tl, Path(a.timeline).resolve().parent, a.out_dir, force=a.force, accent=s.brand["accent_color"]
-    )
+    warnings = plan_specs(make_backend(s), tl, Path(a.timeline).resolve().parent, a.out_dir, force=a.force)
     tl.save(a.timeline)
     for w in warnings:
         print(f"  ! {w}")
-    print(f"OK: скринкасты -> {a.out_dir}")
+    print(f"OK: спецификации инфографики -> {a.out_dir}")
+
+
+def _cmd_render(a, s: Settings) -> None:
+    tl = Timeline.load(a.timeline)
+    base = Path(a.timeline).resolve().parent
+    accent = s.brand["accent_color"]
+    warnings = render_screencasts(tl, base, a.out_dir, force=a.force, accent=accent)
+    warnings += render_infographics(tl, base, a.out_dir, force=a.force, accent=accent)
+    tl.save(a.timeline)
+    for w in warnings:
+        print(f"  ! {w}")
+    print(f"OK: скринкасты и инфографика -> {a.out_dir}")
 
 
 def _cmd_assemble(a, s: Settings) -> None:
@@ -146,7 +164,21 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--out", default="screencast.mp4")
     sp.set_defaults(fn=_cmd_screencast)
 
-    sp = sub.add_parser("render", help="записать screencast-клипы таймлайна по их сценариям")
+    sp = sub.add_parser("infographic", help="спецификация (JSON) -> анимированная инфографика mp4")
+    sp.add_argument("spec")
+    sp.add_argument("--out", default="infographic.mp4")
+    sp.add_argument("--width", type=int, default=1920)
+    sp.add_argument("--height", type=int, default=1080)
+    sp.add_argument("--fps", type=int, default=30)
+    sp.set_defaults(fn=_cmd_infographic)
+
+    sp = sub.add_parser("specs", help="LLM: составить спецификации для infographic-клипов таймлайна")
+    sp.add_argument("timeline")
+    sp.add_argument("--out-dir", default="specs")
+    sp.add_argument("--force", action="store_true")
+    sp.set_defaults(fn=_cmd_specs)
+
+    sp = sub.add_parser("render", help="записать screencast- и infographic-клипы таймлайна")
     sp.add_argument("timeline")
     sp.add_argument("--out-dir", default="renders")
     sp.add_argument("--force", action="store_true")

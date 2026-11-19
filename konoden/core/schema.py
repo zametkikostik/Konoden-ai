@@ -29,6 +29,9 @@ class Clip(BaseModel):
     scenario: Optional[str] = Field(
         default=None, description="Путь к JSON-сценарию скринкаста (для kind=screencast). Заполняется системой"
     )
+    spec: Optional[str] = Field(
+        default=None, description="Путь к JSON-спецификации инфографики (для kind=infographic). Заполняется системой"
+    )
     start: float = Field(default=0.0, ge=0, description="Смещение внутри исходника, сек")
     duration: float = Field(gt=0, le=120, description="Длительность клипа на таймлайне, сек")
     voiceover: Optional[str] = Field(default=None, description="Текст озвучки для этой сцены")
